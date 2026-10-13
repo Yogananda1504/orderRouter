@@ -6,8 +6,8 @@ import java.util.Map;
 public class Order {
 
     private Long id;
-    private OrderStatus status = OrderStatus.UNASSIGNED;
-    private Center assignedCenter;
+    private volatile OrderStatus status = OrderStatus.UNASSIGNED;
+    private volatile Center assignedCenter;
     private double x;
     private double y;
     private Map<Long, Integer> items = new HashMap<>();

@@ -39,11 +39,12 @@ public abstract class DeliveryStrategy<T> {
     }
 
     private boolean hasStock(Center center, Map<Long, Integer> items) {
-        if (center.getItems() == null) {
+        Map<Long, Integer> stock = center.getItems();
+        if (stock == null) {
             return false;
         }
         for (Map.Entry<Long, Integer> item : items.entrySet()) {
-            Integer available = center.getItems().get(item.getKey());
+            Integer available = stock.get(item.getKey());
             if (available == null || available < item.getValue()) {
                 return false;
             }

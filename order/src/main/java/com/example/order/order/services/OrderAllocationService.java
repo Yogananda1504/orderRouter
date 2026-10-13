@@ -1,7 +1,7 @@
 package com.example.order.order.services;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -30,7 +30,7 @@ public class OrderAllocationService {
 
     // Users and their orders retain input order; choice controls center selection.
     // Orders without sufficient stock remain unassigned for a later attempt.
-    public synchronized List<Order> allocateOrders(List<User> users) {
+    public List<Order> allocateOrders(List<User> users) {
         List<Order> allocatedOrders = new ArrayList<>();
         for (User user : List.copyOf(users)) {
             DeliveryStrategy<Center> deliveryStrategy = switch (user.getChoice()) {
@@ -38,26 +38,46 @@ public class OrderAllocationService {
                 case DISTANCE -> distanceStrategy;
             };
             for (Order order : List.copyOf(user.getOrders())) {
-                if (order.getStatus() != OrderStatus.UNASSIGNED) {
-                    continue;
+                if (allocateOrder(order, deliveryStrategy)) {
+                    allocatedOrders.add(order);
                 }
+            }
+        }
+        return List.copyOf(allocatedOrders);
+    }
+
+    private boolean allocateOrder(Order order, DeliveryStrategy<Center> deliveryStrategy) {
+        // Always acquire the order before a center. Never hold two center locks.
+        synchronized (order) {
+            if (order.getStatus() != OrderStatus.UNASSIGNED) {
+                return false;
+            }
+            while (true) {
                 Center center;
                 try {
                     center = deliveryStrategy.calculate(order);
                 } catch (NoAvailableCenterException exception) {
-                    continue;
+                    return false;
                 }
-                Map<Long, Integer> remainingStock = new HashMap<>(center.getItems());
-                for (Map.Entry<Long, Integer> item : order.getItems().entrySet()) {
-                    remainingStock.put(item.getKey(), remainingStock.get(item.getKey()) - item.getValue());
+                synchronized (center) {
+                    Map<Long, Integer> remainingStock = new TreeMap<>(center.getItems());
+                    boolean hasStock = order.getItems().entrySet().stream().allMatch(item -> {
+                        Integer available = remainingStock.get(item.getKey());
+                        return available != null && available >= item.getValue();
+                    });
+                    if (!hasStock) {
+                        // Release this center before selecting again using current stock.
+                        continue;
+                    }
+                    for (Map.Entry<Long, Integer> item : order.getItems().entrySet()) {
+                        remainingStock.put(item.getKey(), remainingStock.get(item.getKey()) - item.getValue());
+                    }
+                    center.setItems(remainingStock);
+                    order.setAssignedCenter(center);
+                    order.setStatus(OrderStatus.ASSIGNED);
+                    return true;
                 }
-                center.setItems(remainingStock);
-                order.setAssignedCenter(center);
-                order.setStatus(OrderStatus.ASSIGNED);
-                allocatedOrders.add(order);
             }
         }
-        return List.copyOf(allocatedOrders);
-        
     }
 }

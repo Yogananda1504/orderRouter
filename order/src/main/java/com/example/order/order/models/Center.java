@@ -1,7 +1,9 @@
 package com.example.order.order.models;
 
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 public class Center {
 
@@ -9,7 +11,8 @@ public class Center {
     private double x;
     private double y;
     private int grade = 1;
-    private Map<Long, Integer> items = new HashMap<>();
+    // Publish sorted, immutable snapshots so strategy reads cannot race with stock updates.
+    private volatile SortedMap<Long, Integer> items = Collections.emptySortedMap();
 
     public Center() {
     }
@@ -18,7 +21,7 @@ public class Center {
         this.centerId = centerId;
         this.x = x;
         this.y = y;
-        this.items = items;
+        setItems(items);
     }
 
     public Center(Long centerId, double x, double y, Map<Long, Integer> items, int grade) {
@@ -61,11 +64,11 @@ public class Center {
         this.y = y;
     }
 
-    public Map<Long, Integer> getItems() {
+    public SortedMap<Long, Integer> getItems() {
         return items;
     }
 
-    public void setItems(Map<Long, Integer> items) {
-        this.items = items;
+    public synchronized void setItems(Map<Long, Integer> items) {
+        this.items = Collections.unmodifiableSortedMap(new TreeMap<>(items));
     }
 }
